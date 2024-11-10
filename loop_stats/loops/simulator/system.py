@@ -42,3 +42,4 @@ class BravaisLatticeWithLoopDefects(BravaisLattice):
     def registered_loop(self, item: int) -> FundamentalLoopDefect:
         return self._loop_register[item]
 
+

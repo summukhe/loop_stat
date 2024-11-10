@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from loop_stats.bravais_lattice import get_basis_pair
 from loop_stats.bravais_lattice import BravaisLattice
 from loop_stats.bravais_lattice import plot_lattice_grid

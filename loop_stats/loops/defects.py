@@ -1,5 +1,6 @@
 import numpy as np
-from typing import List
+from typing import List, Union
+from loop_stats.bravais_lattice.typing import CoordinateTuple, LatticeSize
 from loop_stats.bravais_lattice import LatticeCoordinate
 from loop_stats.bravais_lattice import to_lattice_coordinate
 
@@ -82,11 +83,32 @@ class FundamentalLoopDefect:
         return isinstance(other, FundamentalLoopDefect) and (str(self) == str(other))
 
 
+@np.vectorize
+def periodic_coordinate(coordinate: LatticeCoordinate,
+                        lattice_boundary: LatticeSize = None
+                        ) -> LatticeCoordinate:
+    if (lattice_boundary is not None) and (len(coordinate) == len(lattice_boundary)):
+        return to_lattice_coordinate([c % lattice_boundary[i] for i, c in enumerate(coordinate.to_list())])
+    return coordinate
+
+
+def generate_defect_coordinates(defect: FundamentalLoopDefect,
+                                start_coord: Union[CoordinateTuple, LatticeCoordinate],
+                                lattice_size: LatticeSize = None,
+                                ) -> List[LatticeCoordinate]:
+    start_coord = to_lattice_coordinate(start_coord)
+    if defect.ndim != start_coord.ndim:
+        raise ValueError(f"Error: defect incompatible with coordinate type!")
+    return periodic_coordinate([c + start_coord for c in defect], lattice_size)
+
+
 def anti_cycle(defect: FundamentalLoopDefect):
     n = len(defect)
     offsets = []
     for i in range(n):
-        offset = to_lattice_coordinate([-entry if entry != 0 else entry for entry in defect[i].to_list()])
+        offset = to_lattice_coordinate([-entry if entry != 0 else entry
+                                        for entry in defect[i].to_list()])
         offsets.append(offset)
     return FundamentalLoopDefect(offsets[::-1])
+
 

@@ -1,7 +1,11 @@
 import numpy as np
+from tqdm import tqdm
 from typing import Tuple, Union
 from .typing import LatticeSize
-from .lattice_coordinates import CoordinateTuple, LatticeCoordinate, to_lattice_coordinate
+from .lattice_coordinates import (CoordinateTuple,
+                                  LatticeCoordinate,
+                                  to_lattice_coordinate,
+                                  check_coordinate_validity)
 from .basis_vector import BasisVector, BasisVector3D, BasisVector2D
 
 
@@ -16,6 +20,7 @@ class BravaisLattice:
                  xy_face_centered: bool = False,
                  yz_face_centered: bool = False,
                  xz_face_centered: bool = False,
+                 show_progress: bool = True,
                  **kwargs):
         if isinstance(size, int):
             size = tuple([size for _ in range(len(basis))])
@@ -33,10 +38,12 @@ class BravaisLattice:
             raise ValueError(f"Error: supports 2D/3D lattices only!")
         self._xyz = None
         self._lattice_type = None
+        self._coord = None
         self._params = dict(body_centered=body_centered,
                             xy_face_centered=xy_face_centered,
                             yz_face_centered=yz_face_centered,
                             xz_face_centered=xz_face_centered)
+        self.__initialize_coordinates(show_progress)
 
     @property
     def ndim(self) -> int:
@@ -44,7 +51,7 @@ class BravaisLattice:
 
     @property
     def size(self) -> int:
-        return np.prod(self._size)
+        return self._xyz.shape[0]
 
     @property
     def shape(self) -> LatticeSize:
@@ -81,24 +88,13 @@ class BravaisLattice:
         return self._params.get('xz_face_centered', False) if self.ndim == 3 else False
 
     def check_coordinate(self, coordinate: LatticeCoordinate) -> bool:
-        coordinate = to_lattice_coordinate(coordinate)
-        if self.ndim == coordinate.ndim:
-            if all([coordinate[i].is_integer for i in range(coordinate.ndim)]):
-                return True
-
-            if self.body_centered and not any([coordinate[i].is_integer for i in range(coordinate.ndim)]):
-                return True
-
-            x_check = (self.xy_face_centered or self.xz_face_centered) and not coordinate['x'].is_integer
-            y_check = (self.xy_face_centered or self.yz_face_centered) and not coordinate['y'].is_integer
-
-            check = (x_check or coordinate['x'].is_integer) and (y_check or coordinate['y'].is_integer)
-
-            if self.ndim == 3:
-                z_check = (self.xz_face_centered or self.yz_face_centered) and not coordinate['z'].is_integer
-                check = check and (z_check or coordinate['z'].is_integer)
-            return check
-        return False
+        return check_coordinate_validity(coordinate,
+                                         lattice_dim=self.ndim,
+                                         lattice_size=self.shape,
+                                         body_centered=self.body_centered,
+                                         xy_face_centered=self.xy_face_centered,
+                                         yz_face_centered=self.yz_face_centered,
+                                         xz_face_centered=self.xz_face_centered)
 
     def __getitem__(self, coordinate: Union[LatticeCoordinate, CoordinateTuple]) -> np.ndarray:
         coordinate = to_lattice_coordinate(coordinate)
@@ -112,49 +108,82 @@ class BravaisLattice:
             return x.to_array()
         raise IndexError(f"Error: invalid coordinate {coordinate}!")
 
-    def __all_coord_list(self):
-        data = list()
+    def __initialize_coordinates(self, show_prgress: bool = True):
+        xyz = list()
         tags = list()
+        coordinates = list()
+        pbar = None
         if self.ndim == 2:
             sx, sy = self._size
+            if show_prgress:
+                pbar = tqdm(total=sx * sy, position=0, leave=True, desc="building lattice")
             for i in range(sx):
                 for j in range(sy):
-                    data.append(self[(i, j)])
+                    c = (i, j)
+                    xyz.append(self[c])
                     tags.append(0)
+                    coordinates.append(c)
                     if self.xy_face_centered:
-                        data.append(self[(i + 0.5, j + 0.5)])
+                        c = (i + 0.5, j + 0.5)
+                        xyz.append(self[c])
                         tags.append(2)
+                        coordinates.append(c)
+                    if pbar:
+                        pbar.update(1)
         else:
             sx, sy, sz = self._size
+            if show_prgress:
+                pbar = tqdm(total=sx * sy, position=0, leave=True, desc="building lattice")
             for i in range(sx):
                 for j in range(sy):
                     for k in range(sz):
-                        data.append(self[(i, j, k)])
+                        c = (i, j, k)
+                        xyz.append(self[c])
                         tags.append(0)
+                        coordinates.append(c)
                         if self.body_centered:
-                            data.append(self[(i + 0.5, j + 0.5, k + 0.5)])
+                            c = (i + 0.5, j + 0.5, k + 0.5)
+                            xyz.append(self[c])
                             tags.append(2)
+                            coordinates.append(c)
                         if self.xy_face_centered:
-                            data.append(self[(i + 0.5, j + 0.5, k)])
+                            c = (i + 0.5, j + 0.5, k)
+                            xyz.append(self[c])
                             tags.append(1)
+                            coordinates.append(c)
                         if self.yz_face_centered:
-                            data.append(self[(i, j + 0.5, k + 0.5)])
+                            c = (i, j + 0.5, k + 0.5)
+                            xyz.append(self[c])
                             tags.append(1)
+                            coordinates.append(c)
                         if self.xz_face_centered:
-                            data.append(self[(i+0.5, j, k+0.5)])
+                            c = (i+0.5, j, k+0.5)
+                            xyz.append(self[c])
                             tags.append(1)
-        self._xyz = np.array(data)
+                            coordinates.append(c)
+                        if pbar:
+                            pbar.update(1)
+        if pbar:
+            pbar.close()
+        self._xyz = np.array(xyz)
         self._lattice_type = np.array(tags)
+        self._coord = np.array(coordinates)
 
     @property
     def xyz(self) -> np.ndarray:
         if self._xyz is None:
-            self.__all_coord_list()
+            self.__initialize_coordinates()
         return self._xyz
 
     @property
     def site_types(self) -> np.ndarray:
         if self._lattice_type is None:
-            self.__all_coord_list()
+            self.__initialize_coordinates()
         return self._lattice_type
+
+    @property
+    def coordinate(self) -> np.ndarray:
+        if self._coord is None:
+            self.__initialize_coordinates()
+        return self._coord
 

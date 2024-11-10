@@ -1,7 +1,7 @@
 import re
 from typing import Union, List
 from abc import ABCMeta, abstractmethod
-from loop_stats.bravais_lattice.typing import CoordinateTuple, CoordinateTuple3D, CoordinateTuple2D
+from loop_stats.bravais_lattice.typing import CoordinateTuple, CoordinateTuple3D, CoordinateTuple2D, LatticeSize
 
 
 TOLERANCE = 1e-5
@@ -199,3 +199,33 @@ def to_lattice_coordinate(x: Union[str, LatticeCoordinate, CoordinateTuple]) -> 
         return LatticeCoordinate3D(x)
     raise ValueError(f"Error: expects 2/3D tuple found {len(x)}!")
 
+
+def check_coordinate_validity(coordinate: Union[LatticeCoordinate, CoordinateTuple],
+                              lattice_dim: int,
+                              lattice_size: LatticeSize,
+                              body_centered: bool,
+                              xy_face_centered: bool,
+                              yz_face_centered: bool,
+                              xz_face_centered: bool,
+                              ) -> bool:
+    coordinate = to_lattice_coordinate(coordinate)
+    if lattice_dim == coordinate.ndim:
+        if any([(v < 0) or (v >= s) for s, v in zip(lattice_size, coordinate.to_list())]):
+            return False
+
+        if all([coordinate[i].is_integer for i in range(coordinate.ndim)]):
+            return True
+
+        if body_centered and not any([coordinate[i].is_integer for i in range(coordinate.ndim)]):
+            return True
+
+        x_check = (xy_face_centered or xz_face_centered) and not coordinate['x'].is_integer
+        y_check = (xy_face_centered or yz_face_centered) and not coordinate['y'].is_integer
+
+        check = (x_check or coordinate['x'].is_integer) and (y_check or coordinate['y'].is_integer)
+
+        if lattice_dim == 3:
+            z_check = (xz_face_centered or yz_face_centered) and not coordinate['z'].is_integer
+            check = check and (z_check or coordinate['z'].is_integer)
+        return check
+    return False
