@@ -14,7 +14,8 @@ from loop_stats.loops.defects import FundamentalLoopDefect, generate_defect_coor
 
 class LatticeCoordinateValidityChecker:
     def __init__(self, lattice: BravaisLattice):
-        self.config = dict(lattice_dim=lattice.dim,
+        self.config = dict(lattice_dim=lattice.ndim,
+                           lattice_size=lattice.shape,
                            body_centered=lattice.body_centered,
                            xy_face_centered=lattice.xy_face_centered,
                            yz_face_centered=lattice.yz_face_centered,
@@ -33,8 +34,10 @@ class LatticeCoordinateValidityChecker:
 
 def independent_node_partition(lattice: BravaisLattice,
                                loop_group: List[FundamentalLoopDefect],
-                               coordinate_checker: Union[Callable, LatticeCoordinateValidityChecker],
+                               coordinate_checker: Union[Callable, LatticeCoordinateValidityChecker] = None,
                                ):
+    if coordinate_checker is None:
+        coordinate_checker = LatticeCoordinateValidityChecker(lattice)
     valid_nodes = []
     coord_index = dict()
     counter = 0
@@ -48,7 +51,7 @@ def independent_node_partition(lattice: BravaisLattice,
     neighbor_edges = []
 
     for c in tqdm(coord_index, desc="Building Neighborhood Graph"):
-        current_index = coord_index[c]
+        current_index = coord_index[c][1]
         lattice_neighbors = []
         for d in loop_group:
             neighbors = generate_defect_coordinates(d, c, lattice_size=lattice.shape)

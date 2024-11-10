@@ -83,7 +83,6 @@ class FundamentalLoopDefect:
         return isinstance(other, FundamentalLoopDefect) and (str(self) == str(other))
 
 
-@np.vectorize
 def periodic_coordinate(coordinate: LatticeCoordinate,
                         lattice_boundary: LatticeSize = None
                         ) -> LatticeCoordinate:
@@ -99,7 +98,7 @@ def generate_defect_coordinates(defect: FundamentalLoopDefect,
     start_coord = to_lattice_coordinate(start_coord)
     if defect.ndim != start_coord.ndim:
         raise ValueError(f"Error: defect incompatible with coordinate type!")
-    return periodic_coordinate([c + start_coord for c in defect], lattice_size)
+    return [periodic_coordinate(c + start_coord, lattice_size) for c in defect]
 
 
 def anti_cycle(defect: FundamentalLoopDefect):
